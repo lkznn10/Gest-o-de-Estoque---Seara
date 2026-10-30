@@ -1,1 +1,385 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SEARA | Gestão de Estoque</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:Arial,sans-serif}
+body{background:#f2f3f5;color:#292929}
+header{background:#bd101c;color:white;padding:22px}
+.header{max-width:1150px;margin:auto;display:flex;justify-content:space-between;align-items:center}
+.logo{font-size:30px;font-weight:900}
+.logo small{display:block;font-size:10px;letter-spacing:3px}
+main{max-width:1150px;margin:28px auto;padding:0 16px}
+h2{margin-bottom:8px}
+.sub{color:#777;font-size:14px;margin-bottom:22px}
+.panel{background:white;border-radius:12px;padding:20px;margin-bottom:20px;box-shadow:0 2px 9px #0000000c}
+.imports{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.import-card{border:1px solid #ddd;border-radius:10px;padding:17px}
+.import-card h3{font-size:15px;margin-bottom:8px}
+.import-card p{font-size:12px;color:#777;margin-bottom:14px;min-height:30px}
+input[type=file]{width:100%;font-size:12px}
+.import-card button{margin-top:12px;width:100%}
+button{border:0;background:#bd101c;color:white;padding:12px;border-radius:7px;cursor:pointer;font-weight:bold}
+button:hover{background:#970d16}
+.secondary{background:#555}
+.secondary:hover{background:#333}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px}
+.stat{background:white;padding:18px;border-radius:10px;border-left:5px solid #bd101c}
+.stat p{font-size:13px;color:#777}
+.stat strong{display:block;font-size:27px;margin-top:9px}
+.search{width:100%;padding:15px;border:1px solid #ddd;border-radius:8px;font-size:16px}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:650px}
+th,td{text-align:left;padding:13px;border-bottom:1px solid #eee;font-size:13px}
+th{background:#f5f5f5}
+.status{padding:6px 9px;border-radius:20px;font-size:11px;font-weight:bold}
+.ok{background:#d9f5e2;color:#168344}
+.warn{background:#fff0cf;color:#956000}
+.empty{text-align:center;color:#888;padding:35px}
+.info{background:#fff6e7;padding:13px;border-radius:8px;font-size:12px;color:#765000;margin-bottom:15px}
+#mensagem{font-size:13px;margin-top:12px;color:#168344}
+.history{font-size:12px;color:#777;line-height:2}
+footer{text-align:center;color:#999;padding:25px;font-size:12px}
+@media(max-width:700px){
+ .imports{grid-template-columns:1fr}
+ .stats{grid-template-columns:1fr}
+ .header{align-items:flex-start;gap:10px;flex-direction:column}
+}
+</style>
+</head>
+
+<body>
+
+<header>
+<div class="header">
+ <div class="logo">SEARA<small>GESTÃO DE ESTOQUE</small></div>
+ <div>Consulta de produtos</div>
+</div>
+</header>
+
+<main>
+
+<h2>Painel de estoque</h2>
+<p class="sub">Importação e consulta de estoque físico e contábil.</p>
+
+<div class="panel">
+<h3 style="margin-bottom:15px">Importação de planilhas</h3>
+
+<div class="info">
+Importe primeiro a base da manhã. Depois, importe os dois complementos.
+Os complementos atualizam os dados encontrados e preservam os campos que não forem enviados.
+</div>
+
+<div class="imports">
+
+<div class="import-card">
+<h3>01 — Estoque da manhã</h3>
+<p>Base principal do dia. Inicia a consulta.</p>
+<input type="file" id="base" accept=".xlsx,.xls,.csv">
+<button onclick="importar('base')">IMPORTAR BASE</button>
+</div>
+
+<div class="import-card">
+<h3>02 — Complemento das 11h</h3>
+<p>Atualiza e complementa a base principal.</p>
+<input type="file" id="meio" accept=".xlsx,.xls,.csv">
+<button onclick="importar('meio')">IMPORTAR COMPLEMENTO</button>
+</div>
+
+<div class="import-card">
+<h3>03 — Complemento da tarde</h3>
+<p>Atualiza as informações da consulta.</p>
+<input type="file" id="tarde" accept=".xlsx,.xls,.csv">
+<button onclick="importar('tarde')">IMPORTAR COMPLEMENTO</button>
+</div>
+
+</div>
+
+<div id="mensagem"></div>
+</div>
+
+<div class="stats">
+<div class="stat">
+<p>Produtos cadastrados</p>
+<strong id="total">0</strong>
+</div>
+<div class="stat">
+<p>Com divergência</p>
+<strong id="divergentes">0</strong>
+</div>
+<div class="stat">
+<p>Sem divergência</p>
+<strong id="corretos">0</strong>
+</div>
+</div>
+
+<div class="panel">
+<h3 style="margin-bottom:15px">Pesquisar produto</h3>
+<input class="search" id="pesquisa"
+placeholder="Digite o código ou descrição..."
+oninput="renderizar()">
+</div>
+
+<div class="panel">
+<h3 style="margin-bottom:15px">Resultado da consulta</h3>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>Código</th>
+<th>Descrição</th>
+<th>Físico</th>
+<th>Contábil</th>
+<th>Diferença</th>
+<th>Situação</th>
+</tr>
+</thead>
+<tbody id="tabela"></tbody>
+</table>
+</div>
+<div id="vazio" class="empty">Importe a planilha da manhã para começar.</div>
+</div>
+
+<div class="panel">
+<h3 style="margin-bottom:10px">Histórico de importações</h3>
+<div class="history" id="historico">Nenhuma importação realizada.</div>
+</div>
+
+<div class="actions" style="display:flex;gap:10px;flex-wrap:wrap">
+<button onclick="exportar()">EXPORTAR ESTOQUE ATUAL</button>
+<button class="secondary" onclick="limpar()">LIMPAR DADOS DO DIA</button>
+</div>
+
+</main>
+
+<footer>SEARA | Painel demonstrativo de controle de estoque</footer>
+
+<script>
+let produtos = JSON.parse(localStorage.getItem("seara_produtos") || "[]");
+let historico = JSON.parse(localStorage.getItem("seara_historico") || "[]");
+let baseImportada = localStorage.getItem("seara_base") === "true";
+
+function salvar(){
+ localStorage.setItem("seara_produtos",JSON.stringify(produtos));
+ localStorage.setItem("seara_historico",JSON.stringify(historico));
+ localStorage.setItem("seara_base",String(baseImportada));
+}
+
+function normalizar(v){
+ return String(v ?? "").trim().toLowerCase()
+ .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+ .replace(/[^a-z0-9]/g,"");
+}
+
+function numero(v){
+ if(v===null || v===undefined || v==="") return null;
+ if(typeof v==="number") return v;
+ let s=String(v).trim().replace(/\s/g,"");
+ if(s.includes(",")) s=s.replace(/\./g,"").replace(",",".");
+ let n=Number(s);
+ return Number.isFinite(n)?n:null;
+}
+
+function valor(obj,aliases){
+ const chaves=Object.keys(obj);
+ for(const alias of aliases){
+  const chave=chaves.find(k=>normalizar(k)===normalizar(alias));
+  if(chave!==undefined && obj[chave]!=="" && obj[chave]!==null)
+   return obj[chave];
+ }
+ return null;
+}
+
+function codigoProduto(p){
+ return String(valor(p,["codigo","cod","sku","codigo produto","cod produto","material","item"]) ?? "").trim();
+}
+
+function converter(linha){
+ return {
+  codigo:codigoProduto(linha),
+  nome:valor(linha,["descricao","descrição","produto","nome","descricao produto"]),
+  fisico:numero(valor(linha,["fisico","físico","estoque fisico","quantidade fisica","qtd fisica","saldo fisico"])),
+  contabil:numero(valor(linha,["contabil","contábil","estoque contabil","quantidade contabil","qtd contabil","saldo contabil"]))
+ };
+}
+
+function formatar(v){
+ return Number(v).toLocaleString("pt-BR",{maximumFractionDigits:3});
+}
+
+function mensagem(txt,erro=false){
+ const el=document.getElementById("mensagem");
+ el.textContent=txt;
+ el.style.color=erro?"#bd101c":"#168344";
+}
+
+async function importar(tipo){
+ if(typeof XLSX==="undefined"){
+  mensagem("Biblioteca de leitura indisponível. Verifique sua conexão.",true);
+  return;
+ }
+
+ const input=document.getElementById(tipo);
+ const arquivo=input.files[0];
+
+ if(!arquivo){
+  mensagem("Selecione uma planilha antes de importar.",true);
+  return;
+ }
+
+ if(tipo!=="base" && !baseImportada){
+  mensagem("Importe primeiro a planilha principal da manhã.",true);
+  return;
+ }
+
+ try{
+  const dados=await arquivo.arrayBuffer();
+  const workbook=XLSX.read(dados,{type:"array"});
+  const primeira=workbook.SheetNames[0];
+  const linhas=XLSX.utils.sheet_to_json(workbook.Sheets[primeira],{defval:null});
+
+  if(!linhas.length) throw new Error("A planilha está vazia.");
+
+  const novos=linhas.map(converter).filter(p=>p.codigo);
+
+  if(!novos.length) throw new Error("Não encontrei códigos de produtos.");
+
+  if(tipo==="base"){
+   if(!confirm("A importação da manhã substituirá a base atual. Deseja continuar?"))
+    return;
+
+   produtos=novos.map(p=>({...p}));
+   baseImportada=true;
+  }else{
+   let atualizados=0;
+   let adicionados=0;
+
+   novos.forEach(novo=>{
+    let existente=produtos.find(p=>String(p.codigo)===String(novo.codigo));
+
+    if(existente){
+     if(novo.nome!==null) existente.nome=novo.nome;
+     if(novo.fisico!==null) existente.fisico=novo.fisico;
+     if(novo.contabil!==null) existente.contabil=novo.contabil;
+     atualizados++;
+    }else{
+     produtos.push(novo);
+     adicionados++;
+    }
+   });
+
+   mensagem(`${atualizados} produtos atualizados e ${adicionados} novos produtos adicionados.`);
+  }
+
+  const nomes={
+   base:"Estoque da manhã",
+   meio:"Complemento das 11h",
+   tarde:"Complemento da tarde"
+  };
+
+  historico.unshift({
+   nome:nomes[tipo],
+   arquivo:arquivo.name,
+   data:new Date().toLocaleString("pt-BR"),
+   quantidade:novos.length
+  });
+
+  salvar();
+  renderizar();
+
+  if(tipo==="base")
+   mensagem(`${novos.length} produtos carregados na base principal.`);
+
+  input.value="";
+
+ }catch(e){
+  mensagem("Erro na importação: "+e.message,true);
+ }
+}
+
+function renderizar(){
+ const busca=normalizar(document.getElementById("pesquisa").value);
+
+ const lista=produtos.filter(p=>
+  normalizar(p.codigo).includes(busca) ||
+  normalizar(p.nome).includes(busca)
+ );
+
+ const divergentes=produtos.filter(p=>
+  p.fisico!==null && p.contabil!==null && p.fisico!==p.contabil
+ ).length;
+
+ document.getElementById("total").textContent=produtos.length;
+ document.getElementById("divergentes").textContent=divergentes;
+ document.getElementById("corretos").textContent=produtos.length-divergentes;
+
+ const tbody=document.getElementById("tabela");
+ const vazio=document.getElementById("vazio");
+
+ tbody.innerHTML=lista.map(p=>{
+  const completo=p.fisico!==null && p.contabil!==null;
+  const diferenca=completo?p.fisico-p.contabil:null;
+  const status=!completo?"DADOS INCOMPLETOS":
+   diferenca===0?"SEM DIVERGÊNCIA":"DIVERGÊNCIA";
+
+  return `<tr>
+  <td>${esc(p.codigo)}</td>
+  <td>${esc(p.nome||"Sem descrição")}</td>
+  <td>${p.fisico===null?"—":formatar(p.fisico)}</td>
+  <td>${p.contabil===null?"—":formatar(p.contabil)}</td>
+  <td>${diferenca===null?"—":(diferenca>0?"+":"")+formatar(diferenca)}</td>
+  <td><span class="status ${!completo?"warn":diferenca===0?"ok":"warn"}">${status}</span></td>
+  </tr>`;
+ }).join("");
+
+ vazio.style.display=lista.length?"none":"block";
+ vazio.textContent=produtos.length?"Nenhum produto encontrado.":"Importe a planilha da manhã para começar.";
+
+ document.getElementById("historico").innerHTML=
+ historico.length?historico.map(h=>
+ `${esc(h.data)} — <b>${esc(h.nome)}</b> — ${esc(h.arquivo)} (${h.quantidade} registros)`
+ ).join("<br>"):"Nenhuma importação realizada.";
+}
+
+function esc(v){
+ return String(v??"").replace(/[&<>"']/g,c=>({
+ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+ })[c]);
+}
+
+function exportar(){
+ if(!produtos.length)return alert("Não existem produtos para exportar.");
+
+ const ws=XLSX.utils.json_to_sheet(produtos.map(p=>({
+ "Código":p.codigo,
+ "Descrição":p.nome,
+ "Estoque físico":p.fisico,
+ "Estoque contábil":p.contabil,
+ "Diferença":p.fisico!==null&&p.contabil!==null?p.fisico-p.contabil:null
+ })));
+
+ const wb=XLSX.utils.book_new();
+ XLSX.utils.book_append_sheet(wb,ws,"Estoque atualizado");
+ XLSX.writeFile(wb,"estoque_atualizado.xlsx");
+}
+
+function limpar(){
+ if(!confirm("Deseja apagar todos os dados e o histórico deste painel?"))return;
+ produtos=[];
+ historico=[];
+ baseImportada=false;
+ salvar();
+ renderizar();
+ mensagem("Dados limpos. Importe uma nova base da manhã.");
+}
+
+renderizar();
+</script>
+
+</body>
 </html>
